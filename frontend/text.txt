@@ -1,0 +1,119 @@
+import React, { useState } from 'react';
+import axios from "axios";
+
+const ExcelUpload = () => {
+    const [file, setFile] = useState(null);
+    const [message, setMessage] = useState("");
+    const [skippedRows, setSkippedRows] = useState([]);
+    const [sheetDetails, setSheetDetails] = useState({});
+
+    const handleFileChange = (e) => {
+        setFile(e.target.files[0]);
+        setMessage("");
+        setSkippedRows([]);
+        setSheetDetails({});
+    };
+
+    const handleUpload = async () => {
+        if (!file) {
+            setMessage("Please select a file first.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await axios.post("http://localhost:5000/api/upload", formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            });
+
+            const { message, details, skippedRows: rawSkipped = [] } = res.data;
+
+            // Parse if they're JSON strings (Set → Array of strings)
+            const parsedSkipped = rawSkipped.map(item => {
+                try {
+                    return typeof item === "string" ? JSON.parse(item) : item;
+                } catch {
+                    return { row: {}, reason: "Invalid skipped row format" };
+                }
+            });
+
+            setMessage(message || "File uploaded successfully!");
+            setSheetDetails(details);
+            setSkippedRows(parsedSkipped);
+        } catch (err) {
+            console.error(err);
+            setMessage("Error uploading file.");
+        }
+    };
+
+    return (
+        <div className="max-w-4xl mx-auto mt-10 p-6 border rounded-2xl shadow-lg bg-white">
+            <h2 className="text-xl font-bold mb-4 text-center">Upload Excel File</h2>
+
+            <input
+                type="file"
+                accept=".xlsx, .xls"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4
+                   file:rounded-full file:border-0 file:text-sm file:font-semibold
+                   file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4"
+            />
+
+            <button
+                onClick={handleUpload}
+                className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+            >
+                Upload
+            </button>
+
+            {message && (
+                <p className="mt-4 text-center text-sm text-gray-700">{message}</p>
+            )}
+
+            {Object.keys(sheetDetails).length > 0 && (
+                <div className="mb-6">
+                    <h3 className="font-semibold text-gray-800 text-lg mb-2">Sheet Summary</h3>
+                    <ul className="list-disc list-inside text-sm text-gray-700">
+                        {Object.entries(sheetDetails).map(([sheet, stats]) => (
+                            <li key={sheet}>
+                                <strong>{sheet}:</strong> Inserted {stats.inserted} / Total {stats.total}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {skippedRows.length > 0 && (
+                <div>
+                    <h3 className="text-lg font-semibold text-red-600 mb-2">Skipped Rows</h3>
+                    <div className="overflow-auto max-h-96 border rounded">
+                        <table className="w-full text-sm text-left border-collapse">
+                            <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                                <tr>
+                                    <th className="p-2 border">Reason</th>
+                                    <th className="p-2 border">Row Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {skippedRows.map((item, index) => (
+                                    <tr key={index} className="hover:bg-gray-50">
+                                        <td className="p-2 border text-red-500">{item.reason}</td>
+                                        <td className="p-2 border whitespace-pre-wrap">
+                                            <pre className="text-xs text-gray-800">{JSON.stringify(item.row, null, 2)}</pre>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default ExcelUpload;
